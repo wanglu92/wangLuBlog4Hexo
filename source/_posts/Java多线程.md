@@ -7,7 +7,10 @@ tags:
 
 ## 进程、线程、多线程
 
+* 进程`process`，译作进程，是计算机中已运行程序的实体。进程本身不会运行，是线程的容器。程序本身只是指令的集合，进程才是程序(那些指令)的真正运行。若干进程有可能与同一个程序相关系，且每个进程皆可以同步(循序)或不同步(平行)的方式独立运行。进程为现今分时系统的基本运作单位。
 
+* 线程`thread`，操作系统技术中的术语，是操作系统能够进行运算调度的最小单位。它被包涵在进程之中，一条线程指的是进程中一个单一顺序的控制流，一个进程中可以并发多个线程，每条线程并行执行不同的任务。在Unix System V及SunOS中也被称为轻量进程(lightweight processes)，但轻量进程更多指内核线程(kernel thread)，而把用户线程(user thread)称为线程。
+* 多线程，最开始，线程只是用于分配单个处理器的处理时间的一种工具。但假如操作系统本身支持多个处理器，那么每个线程都可分配给一个不同的处理器，真正进入“并行运算”状态。从程序设计语言的角度看，多线程操作最有价值的特性之一就是程序员不必关心到底使用了多少个处理器。程序在逻辑意义上被分割为数个线程;假如机器本身安装了多个处理器，那么程序会运行得更快，毋需作出任何特殊的调校。多线程是为了同步完成多项任务，不是为了提高运行效率，而是为了提高资源使用效率来提高系统的效率。线程是在同一时间需要完成多项任务的时候实现的。
 
 ## 线程的实现
 
@@ -363,4 +366,536 @@ public class DaemonThread implements Runnable {
 + 一个线程持有锁会导致其他所有需要此锁的线程挂起
 + 在多线程竞争的条件下，加锁、释放锁会导致比较多的上下文切换和调度延迟，引起性能问题
 + 如果一个优先级高的线程等待一个优先级低的线程释放锁，会导致优先级倒置，引起性能问题。
+
+## 线程不安全案例
+
++ 抢购火车票
+
+```
+public class BuyTicket implements Runnable {
+
+    private int ticketCount = 10;
+
+    void buy () throws InterruptedException {
+        while (ticketCount > 0) {
+            Thread.sleep(100L);
+            System.out.println(Thread.currentThread().getName() + " -> 买到票" + ticketCount +  "，剩余:" + --ticketCount);
+        }
+    }
+
+    @Override
+    public void run() {
+        try {
+            buy();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void main(String[] args) {
+        BuyTicket buyTicket = new BuyTicket();
+        Thread thread1 = new Thread(buyTicket, "小明");
+        Thread thread2 = new Thread(buyTicket, "小王");
+        thread1.start();
+        thread2.start();
+    }
+
+}
+
+// output
+小王 -> 买到票10，剩余:9
+小明 -> 买到票10，剩余:8
+小王 -> 买到票8，剩余:7
+小明 -> 买到票7，剩余:6
+小王 -> 买到票6，剩余:5
+小明 -> 买到票6，剩余:5
+小王 -> 买到票5，剩余:4
+小明 -> 买到票5，剩余:3
+小明 -> 买到票3，剩余:2
+小王 -> 买到票2，剩余:1
+小明 -> 买到票1，剩余:0
+小王 -> 买到票1，剩余:-1
+```
+
++ 银行统一账户多人同时取款
+
+```
+public class UnsafeBank {
+
+    public static void main(String[] args) {
+        Account account = new Account(100, "bank");
+        DrawingMoney one = new DrawingMoney(account, 50, "小明");
+        DrawingMoney two = new DrawingMoney(account, 100, "小王");
+        one.start();
+        two.start();
+    }
+
+}
+
+class Account extends Thread {
+
+    private int money;
+    private String userNumber;
+
+    public Account(int money, String userNumber) {
+        this.money = money;
+        this.userNumber = userNumber;
+    }
+
+    public int getMoney() {
+        return money;
+    }
+
+    public void setMoney(int money) {
+        this.money = money;
+    }
+
+    public String getUserNumber() {
+        return userNumber;
+    }
+
+    public void setUserNumber(String userNumber) {
+        this.userNumber = userNumber;
+    }
+}
+
+class DrawingMoney extends Thread {
+
+    private Account account;
+    private int drawMoney;
+
+    public DrawingMoney(Account account, int drawMoney, String name) {
+        super(name);
+        this.account = account;
+        this.drawMoney = drawMoney;
+    }
+
+    void drawingMoney(Account account, int drawMoney) {
+        System.out.println(Thread.currentThread().getName() + "取" + drawMoney);
+        if (account.getMoney() < drawMoney) {
+            System.out.println(Thread.currentThread().getName() + " 余额不足");
+            return;
+        }
+        try {
+            Thread.sleep(1000L);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        account.setMoney(account.getMoney() - drawMoney);
+        System.out.println(Thread.currentThread().getName() + "取" + drawMoney + ",剩余" + account.getMoney());
+    }
+
+    @Override
+    public void run() {
+        drawingMoney(account, drawMoney);
+    }
+}
+
+// output
+小王取100
+小明取50
+小明取50,剩余-50
+小王取100,剩余-50
+```
+
++ 不安全集合
+
+```
+public class UnsafeList {
+
+    public static void main(String[] args) throws InterruptedException {
+        List<String> unsafeList = new LinkedList<>();
+        for (int i = 0; i < 10000; i++) {
+            Thread thread = new Thread(() -> unsafeList.add(Thread.currentThread().getName()), "thread name: " + i);
+            thread.start();
+        }
+        Thread.sleep(10000L);
+        System.out.println(unsafeList.size());
+    }
+
+}
+```
+
+## 同步方法和同步代码块
+
++ 同步方法：在方法中加入`synchronized`关键字
++ 同步代码块：
+
+```
+synchronized (obj) {
+	// 同步的内容
+}
+```
+
+## 线程不安全问题解决案例
+
++ 购票问题
+
+```
+public class BuyTicket implements Runnable {
+
+    private int ticketCount = 10;
+
+    synchronized void buy () throws InterruptedException {
+        while (ticketCount > 0) {
+            Thread.sleep(100L);
+            System.out.println(Thread.currentThread().getName() + " -> 买到票" + ticketCount +  "，剩余:" + --ticketCount);
+        }
+    }
+
+    @Override
+    public void run() {
+        try {
+            buy();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void main(String[] args) {
+        BuyTicket buyTicket = new BuyTicket();
+        Thread thread1 = new Thread(buyTicket, "小明");
+        Thread thread2 = new Thread(buyTicket, "小王");
+        thread1.start();
+        thread2.start();
+    }
+
+}
+```
+
++ 银行账户余额问题
+
+```
+public class UnsafeBank {
+
+    public static void main(String[] args) {
+        Account account = new Account(100, "bank");
+        DrawingMoney one = new DrawingMoney(account, 50, "小明");
+        DrawingMoney two = new DrawingMoney(account, 100, "小王");
+        one.start();
+        two.start();
+    }
+
+}
+
+class Account extends Thread {
+
+    private int money;
+    private String userNumber;
+
+    public Account(int money, String userNumber) {
+        this.money = money;
+        this.userNumber = userNumber;
+    }
+
+    public int getMoney() {
+        return money;
+    }
+
+    public void setMoney(int money) {
+        this.money = money;
+    }
+
+    public String getUserNumber() {
+        return userNumber;
+    }
+
+    public void setUserNumber(String userNumber) {
+        this.userNumber = userNumber;
+    }
+}
+
+class DrawingMoney extends Thread {
+
+    private Account account;
+    private int drawMoney;
+
+    public DrawingMoney(Account account, int drawMoney, String name) {
+        super(name);
+        this.account = account;
+        this.drawMoney = drawMoney;
+    }
+
+    void drawingMoney(Account account, int drawMoney) {
+        synchronized (account) {
+            System.out.println(Thread.currentThread().getName() + "取" + drawMoney);
+            if (account.getMoney() < drawMoney) {
+                System.out.println(Thread.currentThread().getName() + " 余额不足");
+                return;
+            }
+            try {
+                Thread.sleep(1000L);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            account.setMoney(account.getMoney() - drawMoney);
+            System.out.println(Thread.currentThread().getName() + "取" + drawMoney + ",剩余" + account.getMoney());
+        }
+    }
+
+    @Override
+    public void run() {
+        drawingMoney(account, drawMoney);
+    }
+}
+```
+
++ 不安全集合
+
+```
+public class UnsafeList {
+
+    public static void main(String[] args) throws InterruptedException {
+        List<String> unsafeList = new LinkedList<>();
+        for (int i = 0; i < 10000; i++) {
+            Thread thread = new Thread(() -> {
+                synchronized (unsafeList) {
+                    unsafeList.add(Thread.currentThread().getName());
+                }
+            }, "thread name: " + i);
+            thread.start();
+        }
+        Thread.sleep(10000L);
+        System.out.println(unsafeList.size());
+    }
+
+}
+```
+
+## 死锁问题
+
+多个线程各自占有一些共享资源，并且相互其他资源才能继续运行，两个或者多个线程都在等待对方释放资源，双方都停止执行的情况，称为死锁。
+
+当一个同步块同时拥有**两个以上的对象锁**时，就有可能出现死锁问题。
+
+```
+public class DeadLock {
+
+    public static void main(String[] args) {
+
+        KeyOne keyOne = new KeyOne();
+        KeyTwo keyTwo = new KeyTwo();
+
+        Thread thread1 = new Thread(() -> {
+            synchronized (keyOne) {
+                System.out.println(Thread.currentThread().getName() + " I have key one, I need key two");
+                try {
+                    Thread.sleep(100L);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                synchronized (keyTwo) {
+                    System.out.println(Thread.currentThread().getName() + " finish");
+                }
+            }
+        }, "thread-1");
+
+        Thread thread2 = new Thread(() -> {
+            synchronized (keyTwo) {
+                System.out.println(Thread.currentThread().getName() + " I have key two, I need key one");
+                try {
+                    Thread.sleep(100L);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                synchronized (keyOne) {
+                    System.out.println(Thread.currentThread().getName() + " finish");
+                }
+            }
+        }, "thread-1");
+
+        thread1.start();
+        thread2.start();
+
+    }
+
+}
+
+class KeyOne {
+
+}
+
+class KeyTwo {
+
+}
+
+// output
+thread-1 I have key one, I need key two
+thread-1 I have key two, I need key one
+```
+
+## Lock
+
+从JDK1.5开始，可以显式定义同步锁。
+
+`ReentrantLock`为可重入锁，在`java.util.concurrent.locks`下。
+
+```
+public class LockDemo implements Runnable {
+
+    private int ticketCount = 10;
+    private Lock lock = new ReentrantLock();
+
+    void buy() throws InterruptedException {
+        try {
+            lock.lock();
+            while (ticketCount > 0) {
+                Thread.sleep(100L);
+                System.out.println(Thread.currentThread().getName() + " -> 买到票" + ticketCount + "，剩余:" + --ticketCount);
+            }
+        } catch (Exception e) {
+            System.out.println(e);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    @Override
+    public void run() {
+        try {
+            buy();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void main(String[] args) {
+        BuyTicket buyTicket = new BuyTicket();
+        Thread thread1 = new Thread(buyTicket, "小明");
+        Thread thread2 = new Thread(buyTicket, "小王");
+        thread1.start();
+        thread2.start();
+    }
+
+}
+```
+
+## 生产者消费者问题
+
+> 问题描述：
+>
+> + 假设仓库中只能存放一件产品，生产者将生产出的商品放入仓库中，消费者将仓库中的产品取走消费掉。
+> + 如果仓库中没有产品，则生产者将产品放入仓库，否则停止生产并等待，直到仓库中的产品被消费者取走为止。
+> + 如果仓库中放有产品，则消费者可以将产品取走消费，否则停止消费并等待，直到仓库中再次放入产品为止。
+
+Java提供的几个解决线程之间通信问题的方法，线程通信是通信在等待队列中的线程，需要用锁对象来调用线程间通信方法。调用这些方法必须在`synchronized`中否则会抛出`IllegalMonitorStateException`异常
+
++ wait()
++ ait(long timeout)
++ notify()
++ notifyAll()
+
+管程法：利用缓冲区解决
+
+```java
+public class ProducerAndConsumer {
+
+    public static void main(String[] args) {
+        ProductContainer productContainer = new ProductContainer();
+        for (int i = 0; i < 100; i++) {
+            Producer producer = new Producer(productContainer, "producer -> " + i);
+            Consumer consumer = new Consumer(productContainer, "consumer -> " + i);
+            producer.start();
+            consumer.start();
+        }
+    }
+
+}
+
+class Producer extends Thread {
+
+    private ProductContainer container;
+
+    public Producer(ProductContainer container, String name) {
+        super(name);
+        this.container = container;
+    }
+
+    public void product(Production production) throws InterruptedException {
+        container.push(production);
+    }
+
+    @Override
+    public void run() {
+        for (int i = 0; i < 100; i++) {
+            try {
+                product(new Production(Thread.currentThread().getName() + " & " + i));
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
+
+class Consumer extends Thread {
+
+    private ProductContainer container;
+
+    public Consumer(ProductContainer container, String name) {
+        super(name);
+        this.container = container;
+    }
+
+    public void consume() throws InterruptedException {
+        container.pop();
+    }
+
+    @Override
+    public void run() {
+        try {
+            for (int i = 0; i < 100; i++) {
+                consume();
+            }
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+class ProductContainer {
+
+    /**
+     * 安全容器用来存贮商品
+     */
+    private LinkedList<Production> productions = new LinkedList<>();
+
+    public void push(Production production) throws InterruptedException {
+        synchronized (this) {
+            // 多生产者多消费者是需要使用while循环判断
+            while (productions.size() >= 10) {
+                this.wait();
+            }
+            productions.push(production);
+            System.out.println(Thread.currentThread().getName() + " ++ " + production.getProductId());
+            this.notifyAll();
+        }
+    }
+
+    public void pop() throws InterruptedException {
+        synchronized (this) {
+            while (productions.size() <= 0) {
+                this.wait();
+            }
+            Production production = productions.pop();
+            System.out.println(Thread.currentThread().getName() + " -- " + production.getProductId());
+            this.notifyAll();
+        }
+    }
+
+}
+
+class Production {
+
+    private String productionId;
+
+    public Production(String productId) {
+        this.productionId = productId;
+    }
+
+    public String getProductId() {
+        return productionId;
+    }
+
+}
+```
 
