@@ -785,7 +785,7 @@ Java提供的几个解决线程之间通信问题的方法，线程通信是通�
 + notify()
 + notifyAll()
 
-管程法：利用缓冲区解决
+利用缓冲区解决问题，也可以利用标记来解决问题。
 
 ```java
 public class ProducerAndConsumer {
@@ -898,4 +898,32 @@ class Production {
 
 }
 ```
+
+## 线程池
+
+经常创建和销毁线程会使用大量资源，对性能的影响很大。
+
+可以提前创建好一些线程，在使用的时候直接获取，使用完后放回池子中循环利用。
+
+好处：
+
++ 提高响应速度
++ 降低资源消耗
++ 便于线程管理
+
+核心参数：
+
++ corePoolSize：核心线程数量
++ maximumPoolSize：最大线程数
++ keepAliveTime：等待线程最大存活时间
+
+> 使用到的类`ExecutorService`和`Executors`
+>
+> `ExecutorService`：真正的线程池接口，常见子类ThreadPoolExecutor。
+>
+> `Executors`：工具类，线程池的工厂类，用于创建并返回不同类型的线程池。
+
+
+
+
 
