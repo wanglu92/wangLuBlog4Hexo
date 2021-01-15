@@ -185,3 +185,343 @@ public class Client {
 }
 ```
 
+发送文件
+
+```
+package network.FileDownLoad;
+
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.ServerSocket;
+import java.net.Socket;
+
+/**
+ * @author: luu
+ * @date: 2021-01-15 16:43
+ **/
+public class DownloadFile {
+
+    public static void main(String[] args) throws IOException {
+        // 建立一个socket服务器
+        ServerSocket serverSocket = new ServerSocket(9999);
+        // 等待获取连接
+        Socket socket = serverSocket.accept();
+        // 获取socket的资源
+        InputStream socketIn = socket.getInputStream();
+        // 将文件存储
+        FileOutputStream fileOut = new FileOutputStream("copyPicture.jpeg");
+        byte[] buffer = new byte[1024];
+        int length = 0;
+        while ((length = socketIn.read(buffer)) != -1) {
+            fileOut.write(buffer, 0 , length);
+        }
+        // 存储成功通知
+        OutputStream socketOut = socket.getOutputStream();
+        socketOut.write("上传成功！".getBytes());
+
+        // 关闭资源
+        socketOut.close();
+        fileOut.close();
+        socketIn.close();
+        socket.close();
+        serverSocket.close();
+    }
+
+}
+```
+
+```
+package network.FileDownLoad;
+
+import java.io.*;
+import java.net.InetAddress;
+import java.net.Socket;
+
+/**
+ * @author: luu
+ * @date: 2021-01-15 16:42
+ **/
+public class UploadFile {
+
+    public static void main(String[] args) throws IOException {
+        // 建立socket连接
+        Socket socket = new Socket(InetAddress.getByName("127.0.0.1"), 9999);
+        // 获取上传的文件
+        FileInputStream fileIn = new FileInputStream("myPicture.jpeg");
+        // 上传
+        byte[] buffer = new byte[1024];
+        int length = 0;
+        OutputStream socketOut = socket.getOutputStream();
+        while ((length = fileIn.read(buffer)) != -1) {
+            socketOut.write(buffer, 0, length);
+        }
+        // 上传成功关闭输出流
+        socket.shutdownOutput();
+        // 等待服务器通知
+        InputStream socketIn = socket.getInputStream();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        while ((length = socketIn.read(buffer)) != -1) {
+            out.write(buffer, 0, length);
+        }
+        System.out.println(out.toString());
+        // 关闭资源
+        out.close();
+        socketIn.close();
+        fileIn.close();
+        socket.close();
+    }
+
+}
+```
+
+## Tomcat
+
+服务端
+
+## UDP
+
+不用连接，需要知道对方的地址。
+
++ `DatagramPacket`数据报包
++ `DatagramSocket`
+
+```
+package network.udp;
+
+import java.io.IOException;
+import java.net.*;
+
+/**
+ * @author: luu
+ * @date: 2021-01-15 18:14
+ **/
+public class UDPClientOne {
+
+    public static void main(String[] args) throws IOException {
+        DatagramSocket datagramSocket = new DatagramSocket(9999);
+        String words = "hello world";
+        DatagramPacket datagramPacket = new DatagramPacket(words.getBytes(), 0, words.length(), InetAddress.getByName("127.0.0.1"), 9998);
+        datagramSocket.send(datagramPacket);
+        datagramSocket.close();
+    }
+
+}
+```
+
+```
+package network.udp;
+
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+
+/**
+ * @author: luu
+ * @date: 2021-01-15 18:14
+ **/
+public class UDPClientTwo {
+
+    public static void main(String[] args) throws IOException {
+        DatagramSocket datagramSocket = new DatagramSocket(9998);
+        byte[] buffer = new byte[1024];
+        DatagramPacket datagramPacket = new DatagramPacket(buffer, 0, buffer.length);
+        datagramSocket.receive(datagramPacket);
+        System.out.println(new String(datagramPacket.getData()));
+        datagramSocket.close();
+    }
+
+}
+```
+
+聊天程序
+
+发送消息类：
+
+```
+package network.chat;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.SocketException;
+
+/**
+ * @author: luu
+ * @date: 2021-01-15 20:25
+ **/
+public class Send implements Runnable {
+
+    private DatagramSocket datagramSocket;
+    private String toIP;
+    private int toPort;
+    private String nickName;
+
+    public Send(String toIP, int toPort, int ownPort, String nickName) {
+        this.toIP = toIP;
+        this.toPort = toPort;
+        this.nickName = nickName;
+        try {
+            this.datagramSocket = new DatagramSocket(ownPort);
+        } catch (SocketException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void run() {
+        String message;
+        BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
+        try {
+            while (true) {
+                byte[] messages = (nickName + " : " + in.readLine()).getBytes();
+                DatagramPacket datagramPacket = new DatagramPacket(messages, messages.length, InetAddress.getByName(toIP), toPort);
+                datagramSocket.send(datagramPacket);
+                System.out.println("发送到" + toIP + ":" + toPort + "，消息" + " - " + new String(datagramPacket.getData()) + " - " + "发送成功！");
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } finally {
+            datagramSocket.close();
+        }
+    }
+}
+```
+
+接收消息类
+
+```
+package network.chat;
+
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.SocketException;
+
+/**
+ * @author: luu
+ * @date: 2021-01-15 20:26
+ **/
+public class Receive implements Runnable {
+
+    private DatagramSocket datagramSocket;
+
+    public Receive(int ownIp) {
+        try {
+            this.datagramSocket = new DatagramSocket(ownIp);
+        } catch (SocketException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void run() {
+        byte[] buffer = new byte[2048];
+        try {
+            while (true) {
+                DatagramPacket datagramPacket = new DatagramPacket(buffer, buffer.length);
+                datagramSocket.receive(datagramPacket);
+                System.out.println(new String(datagramPacket.getData(), 0, datagramPacket.getLength()));
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } finally {
+            datagramSocket.close();
+        }
+    }
+}
+```
+
+客户端一
+
+```
+package network.chat;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * @author: luu
+ * @date: 2021-01-15 21:04
+ **/
+public class ChatOne {
+
+    public static void main(String[] args) {
+        ExecutorService threadPool = Executors.newFixedThreadPool(2);
+        threadPool.submit(new Send("127.0.0.1", 11001, 11002, "小王"));
+        threadPool.submit(new Receive(11000));
+    }
+
+}
+```
+
+客户端二
+
+```
+package network.chat;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * @author: luu
+ * @date: 2021-01-15 21:11
+ **/
+public class ChatTwo {
+
+    public static void main(String[] args) {
+        ExecutorService threadPool = Executors.newFixedThreadPool(2);
+        threadPool.submit(new Send("127.0.0.1", 11000, 11003, "小张"));
+        threadPool.submit(new Receive(11001));
+    }
+
+}
+```
+
+## URL
+
+统一资源定位符：定位资源，定位互联网上的某一个资源。
+
+`https://www.baidu.com`
+
+```
+协议://IP地址:端口/资源/参数
+```
+
+下载网络资源
+
+```
+package network;
+
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.MalformedURLException;
+import java.net.URL;
+
+/**
+ * @author: luu
+ * @date: 2021-01-15 21:39
+ **/
+public class UrlDownload {
+
+    public static void main(String[] args) throws IOException {
+        URL url = new URL("https://m10.music.126.net/20210115220624/95a4f4eded8f5d962ff157686275f38d/yyaac/0708/0652/0508/0b9b6827b718aa223af92bd52aa2424f.m4a");
+        InputStream in = url.openStream();
+        FileOutputStream out = new FileOutputStream("世间美好与你环环相扣.m4a");
+        byte[] buffer = new byte[2048];
+        int length = 0;
+        while ((length = in.read(buffer)) != -1) {
+            out.write(buffer, 0, length);
+        }
+        out.close();
+        in.close();
+    }
+
+}
+```
+
