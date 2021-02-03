@@ -322,3 +322,352 @@ semaphore.release(); // 释放
 
 ## 线程池
 
+池化技术
+
+优化资源的技术 -> 池化技术
+
+***线程池的好处***
+
+1. 降低资源的消耗
+2. 提高响应的速度
+3. 方便管理
+
+线程复用、控制最大并发数、管理线程
+
+**线程池：三大方法、七大参数、四种拒绝策略**
+
+> Executors三大方法
+>
+> + ```java
+>   ExecutorService executorService = Executors.newCachedThreadPool();
+>   ExecutorService executorService1 = Executors.newFixedThreadPool(10);
+>   ExecutorService executorService2 = Executors.newSingleThreadExecutor();
+>   ```
+
+> 七大参数
+>
+> + ```
+>   public static ExecutorService newCachedThreadPool() {
+>           return new ThreadPoolExecutor(0, Integer.MAX_VALUE,
+>                                         60L, TimeUnit.SECONDS,
+>                                         new SynchronousQueue<Runnable>());
+>       }
+>   ```
+>
+> + ```
+>   public static ExecutorService newFixedThreadPool(int nThreads) {
+>           return new ThreadPoolExecutor(nThreads, nThreads,
+>                                         0L, TimeUnit.MILLISECONDS,
+>                                         new LinkedBlockingQueue<Runnable>());
+>       }
+>   ```
+>
+> + ```
+>   public static ExecutorService newSingleThreadExecutor() {
+>           return new FinalizableDelegatedExecutorService
+>               (new ThreadPoolExecutor(1, 1,
+>                                       0L, TimeUnit.MILLISECONDS,
+>                                       new LinkedBlockingQueue<Runnable>()));
+>       }
+>   ```
+>
+> ```java
+> /**
+>      * Creates a new {@code ThreadPoolExecutor} with the given initial
+>      * parameters.
+>      *
+>      * @param corePoolSize the number of threads to keep in the pool, even
+>      *        if they are idle, unless {@code allowCoreThreadTimeOut} is set
+>      * @param maximumPoolSize the maximum number of threads to allow in the
+>      *        pool
+>      * @param keepAliveTime when the number of threads is greater than
+>      *        the core, this is the maximum time that excess idle threads
+>      *        will wait for new tasks before terminating.
+>      * @param unit the time unit for the {@code keepAliveTime} argument
+>      * @param workQueue the queue to use for holding tasks before they are
+>      *        executed.  This queue will hold only the {@code Runnable}
+>      *        tasks submitted by the {@code execute} method.
+>      * @param threadFactory the factory to use when the executor
+>      *        creates a new thread
+>      * @param handler the handler to use when execution is blocked
+>      *        because the thread bounds and queue capacities are reached
+>      * @throws IllegalArgumentException if one of the following holds:<br>
+>      *         {@code corePoolSize < 0}<br>
+>      *         {@code keepAliveTime < 0}<br>
+>      *         {@code maximumPoolSize <= 0}<br>
+>      *         {@code maximumPoolSize < corePoolSize}
+>      * @throws NullPointerException if {@code workQueue}
+>      *         or {@code threadFactory} or {@code handler} is null
+>      */
+>     public ThreadPoolExecutor(int corePoolSize,
+>                               int maximumPoolSize,
+>                               long keepAliveTime,
+>                               TimeUnit unit,
+>                               BlockingQueue<Runnable> workQueue,
+>                               ThreadFactory threadFactory,
+>                               RejectedExecutionHandler handler) {
+>         if (corePoolSize < 0 ||
+>             maximumPoolSize <= 0 ||
+>             maximumPoolSize < corePoolSize ||
+>             keepAliveTime < 0)
+>             throw new IllegalArgumentException();
+>         if (workQueue == null || threadFactory == null || handler == null)
+>             throw new NullPointerException();
+>         this.acc = System.getSecurityManager() == null ?
+>                 null :
+>                 AccessController.getContext();
+>         this.corePoolSize = corePoolSize;
+>         this.maximumPoolSize = maximumPoolSize;
+>         this.workQueue = workQueue;
+>         this.keepAliveTime = unit.toNanos(keepAliveTime);
+>         this.threadFactory = threadFactory;
+>         this.handler = handler;
+>     }
+> ```
+>
+> 
+
+> 四种拒绝策略
+>
+> ```java
+> /**
+>      * A handler for rejected tasks that throws a
+>      * {@code RejectedExecutionException}.
+>      */
+> public static class AbortPolicy implements RejectedExecutionHandler {
+>   /**
+>          * Creates an {@code AbortPolicy}.
+>          */
+>   public AbortPolicy() { }
+> 
+>   /**
+>          * Always throws RejectedExecutionException.
+>          *
+>          * @param r the runnable task requested to be executed
+>          * @param e the executor attempting to execute this task
+>          * @throws RejectedExecutionException always
+>          */
+>   public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
+>     throw new RejectedExecutionException("Task " + r.toString() +
+>                                          " rejected from " +
+>                                          e.toString());
+>   }
+> }
+> ```
+>
+> ```java
+> /**
+>      * A handler for rejected tasks that runs the rejected task
+>      * directly in the calling thread of the {@code execute} method,
+>      * unless the executor has been shut down, in which case the task
+>      * is discarded.
+>      */
+> public static class CallerRunsPolicy implements RejectedExecutionHandler {
+>   /**
+>          * Creates a {@code CallerRunsPolicy}.
+>          */
+>   public CallerRunsPolicy() { }
+> 
+>   /**
+>          * Executes task r in the caller's thread, unless the executor
+>          * has been shut down, in which case the task is discarded.
+>          *
+>          * @param r the runnable task requested to be executed
+>          * @param e the executor attempting to execute this task
+>          */
+>   public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
+>     if (!e.isShutdown()) {
+>       r.run();
+>     }
+>   }
+> }
+> ```
+>
+> ```java
+> /**
+>      * A handler for rejected tasks that discards the oldest unhandled
+>      * request and then retries {@code execute}, unless the executor
+>      * is shut down, in which case the task is discarded.
+>      */
+> public static class DiscardOldestPolicy implements RejectedExecutionHandler {
+>   /**
+>          * Creates a {@code DiscardOldestPolicy} for the given executor.
+>          */
+>   public DiscardOldestPolicy() { }
+> 
+>   /**
+>          * Obtains and ignores the next task that the executor
+>          * would otherwise execute, if one is immediately available,
+>          * and then retries execution of task r, unless the executor
+>          * is shut down, in which case task r is instead discarded.
+>          *
+>          * @param r the runnable task requested to be executed
+>          * @param e the executor attempting to execute this task
+>          */
+>   public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
+>     if (!e.isShutdown()) {
+>       e.getQueue().poll();
+>       e.execute(r);
+>     }
+>   }
+> }
+> ```
+>
+> ```java
+> /**
+>      * A handler for rejected tasks that silently discards the
+>      * rejected task.
+>      */
+> public static class DiscardPolicy implements RejectedExecutionHandler {
+>   /**
+>          * Creates a {@code DiscardPolicy}.
+>          */
+>   public DiscardPolicy() { }
+> 
+>   /**
+>          * Does nothing, which has the effect of discarding task r.
+>          *
+>          * @param r the runnable task requested to be executed
+>          * @param e the executor attempting to execute this task
+>          */
+>   public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
+>   }
+> }
+> ```
+
+## CPU密集型和IO密集型
+
++ CPU密集型计算比较多的任务，合适使用核心数
++ IO密集型，适合使用最大线程数的两倍
+
+涉及到调优：最大的线程如何设置
+
+## 四大函数式接口
+
+lambda表达式、函数式接口、Stream流计算
+
+> 函数式接口：四大原生的函数式接口
+>
+> + Consumer： 消费型接口，一个输入，没有输出
+>
+> + Function：一个输入一个输出。
+>
+> + Predicate：断定接口，一个输入，返回boolean值。
+>
+> + Supplier：供给型接口，没有输入，一个输出。
+
+## Stream流
+
+## ForkJoin
+
+ForkJoin 1.7 出现，并行执行任务，提高运行效率，大数据量。
+
+MapReduce思想，把大任务拆分为小任务
+
+工作窃取：线程维护的是双端队列
+
+## 异步回调
+
+## JMM
+
+JMM：java内存模型
+
+关于JMM的一些同步的约定
+
+1. 线程解锁前，必须把共享变量**立刻**刷新到主存中。
+2. 线程加锁前，必须读取主寸中的最新的值到工作内存中。
+3. 加锁和解锁必须是同一把锁
+
+线程：工作内存、主存
+
+> 8种操作、4组
+>
+> 1. read、load：从主寸中加载到工作内存中。
+> 2. use、assign：从工作内存加载到执行引擎中。
+> 3. write、store：将工作内存中的数据刷回主寸中。
+> 4. lock、unlock：给数据加锁，作用于主内存，标记变量为一个线程独占。
+
+## Volatile
+
+volatile是java提供的轻量级的同步机制
+
+1. 保证可见性
+   + 保证别的线程对数据的可见性
+2. 不保证原子性
+   + 使用原子类解决单个资源的原子性问题
+   + Atomic包下提供了一些基本数据类型的原子类（直接在内存类中修改值）
+3. 禁止指令重排
+   + 源代码 -》 编译器优化 -》指令并行会重排-》内存系统重排-》执行。
+   + 编译和优化中会将指令重排。
+   + 编译器在进行指令重排的时候，会考虑数据的依赖性。
+   + 内存屏障？CPU指令作用：保证特定的操作的执行顺序。可以保证某些变量的内存的可见性（李忠这些特性volatile实现了可见性） 
+
+## CAS
+
+`compare and swap` 乐观锁的一种实现
+
+java中unsafe类中提供native方法实现
+
+## 单例模式
+
+饿汉式
+
+DCL懒汉式
+
+使用反射破坏单例模式-在构造器中加入判断防止反射破坏
+
+使用枚举类实现单例模式
+
+## 深入理解CAS
+
+`compare and set` 更新并交换，乐观锁思想的一种实现。 
+
+CAS是CPU的并发原语
+
+UnSafe类，java可以通过这个类操作内存。
+
+> 缺点？：
+>
+> 1. 循环耗时？？？
+> 2. 一次性只能保证一个共享变量的原子性
+> 3. 会存在ABA问题
+
+## CAS的ABA问题
+
+使用带版本号的原子引用来解决ABA问题
+
+## 各种锁的理解
+
+### 公平锁、非公平锁
+
++ 公平锁：按照先来后到
++ 非公平锁：可以插队（默认使用非公平锁）
+
+### 可重入锁
+
+可重入锁、递归锁
+
+ 如果线程已经拿到锁，线程中执行的方法也可以拿到锁。
+
+### 自旋锁
+
+spinlock
+
+自己使用原子类实现自旋锁
+
+### 死锁
+
+持有资源，并尝试获取一个不能获得的资源。
+
+排查解决问题
+
+jdk bin 
+
+1. 使用jps定位进程 `jps -l` 看java的进程
+
+2. 使用jstack看进程 `jstack 进程号 
+
+面试工作中，排查问题
+
+1. 日志
+2. 堆栈信息  
